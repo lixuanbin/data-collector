@@ -13,6 +13,7 @@ import java.util.Date;
 public class UploadData implements Serializable {
 	private static final long serialVersionUID = -4399094056867364565L;
 	private String ip;
+	private String channel;
 	private String mid;
 	private String eid;
 	private Date reportTime;
@@ -47,5 +48,13 @@ public class UploadData implements Serializable {
 
 	public void setReportTime(Date reportTime) {
 		this.reportTime = reportTime;
+	}
+
+	public String getChannel() {
+		return channel;
+	}
+
+	public void setChannel(String channel) {
+		this.channel = channel;
 	}
 }

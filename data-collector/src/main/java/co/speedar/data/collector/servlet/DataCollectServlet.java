@@ -27,7 +27,7 @@ import co.speedar.data.collector.service.DataCollectService;
  * @author ben
  *
  */
-@WebServlet(urlPatterns = { "/upload.do" }, loadOnStartup = 1)
+@WebServlet(urlPatterns = { "/upload" }, loadOnStartup = 1)
 public class DataCollectServlet extends HttpServlet {
 	private static final long serialVersionUID = 5977484050293191582L;
 	protected static final Logger log = Logger.getLogger(DataCollectServlet.class);

@@ -16,12 +16,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.JsonGenerationException;
-import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import co.speedar.data.collector.dao.UploadDataDao;
 import co.speedar.data.collector.domain.UploadData;
 import co.speedar.data.collector.domain.UploadResult;
 
@@ -38,6 +38,9 @@ public class DataCollectService {
 	private final Lock writeLock = readWriteLock.writeLock();
 	private final Queue<UploadData> cache = new ArrayBlockingQueue<UploadData>(capacity);
 	private final ObjectMapper mapper;
+
+	@Autowired
+	private UploadDataDao dao;
 
 	public DataCollectService() {
 		mapper = new ObjectMapper();
@@ -61,45 +64,50 @@ public class DataCollectService {
 		return result;
 	}
 
-	public String queryAll() {
-		String result = null;
+	public List<UploadData> queryAll() {
+		List<UploadData> result = new ArrayList<UploadData>();
 		try {
 			readLock.lock();
-			result = mapper.writeValueAsString(cache);
-		} catch (JsonGenerationException e) {
-			log.error(e, e);
-		} catch (JsonMappingException e) {
-			log.error(e, e);
-		} catch (IOException e) {
-			log.error(e, e);
+			for (UploadData data : cache) {
+				result.add(data);
+			}
 		} finally {
 			readLock.unlock();
 		}
 		return result;
 	}
 
-	@Scheduled(fixedDelay = 3 * 60 * 1000)
-	public void processData() {
-		List<UploadData> dataList = new ArrayList<UploadData>();
-		try {
-			writeLock.lock();
-			log.info("queue size: " + cache.size());
-			while (!cache.isEmpty()) {
-				dataList.add(cache.poll());
-			}
-			log.info("list size: " + dataList.size());
-		} finally {
-			writeLock.unlock();
-		}
-		persistData(dataList);
-	}
-
-	private int persistData(List<UploadData> dataList) {
+	public int persistData(List<UploadData> dataList) {
 		try {
 			log.info("data collected: \n" + mapper.writeValueAsString(dataList));
 		} catch (IOException e) {
 			log.error(e, e);
 		}
-		return dataList.size();
+		return dao.batchInsert(dataList);
 	}
+
+	@Scheduled(fixedDelay = 3 * 60 * 1000)
+	public void processData() {
+		List<UploadData> dataList = null;
+		try {
+			writeLock.lock();
+			dataList = drainCache();
+		} finally {
+			writeLock.unlock();
+		}
+		if (dataList != null && !dataList.isEmpty()) {
+			persistData(dataList);
+		}
+	}
+
+	private List<UploadData> drainCache() {
+		List<UploadData> dataList = new ArrayList<UploadData>();
+		log.info("queue size: " + cache.size());
+		while (!cache.isEmpty()) {
+			dataList.add(cache.poll());
+		}
+		log.info("list size: " + dataList.size());
+		return dataList;
+	}
+
 }
