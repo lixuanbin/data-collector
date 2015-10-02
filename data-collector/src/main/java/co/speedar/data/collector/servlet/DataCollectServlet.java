@@ -14,6 +14,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +67,16 @@ public class DataCollectServlet extends HttpServlet {
 			UploadData data = buildDataFromRequest(request);
 			UploadResult result = service.addData(data);
 			String json = mapper.writeValueAsString(result);
+			if (StringUtils.isNotBlank(request.getParameter("callback"))) {
+				// deal with jsonp
+				StringBuffer sb = new StringBuffer();
+				sb.append(request.getParameter("callback"));
+				sb.append("(");
+				sb.append(json);
+				sb.append(");");
+				json = sb.toString();
+				response.setContentType("text/javascript;charset=UTF-8");
+			}
 			PrintWriter writer = response.getWriter();
 			writer.print(json);
 			writer.flush();

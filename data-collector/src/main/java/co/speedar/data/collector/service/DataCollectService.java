@@ -47,10 +47,22 @@ public class DataCollectService {
 		mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
 	}
 
+	/**
+	 * Check if request is granted.
+	 * 
+	 * @param request
+	 * @return
+	 */
 	public boolean isValidRequest(HttpServletRequest request) {
 		return true;
 	}
 
+	/**
+	 * Submit data to cache. Might be blocked by {@link #drainCache()} method.
+	 * 
+	 * @param data
+	 * @return
+	 */
 	public UploadResult addData(UploadData data) {
 		UploadResult result = new UploadResult();
 		try {
@@ -64,6 +76,12 @@ public class DataCollectService {
 		return result;
 	}
 
+	/**
+	 * Query all data in cache. Might be blocked by {@link #drainCache()}
+	 * method.
+	 * 
+	 * @return
+	 */
 	public List<UploadData> queryAll() {
 		List<UploadData> result = new ArrayList<UploadData>();
 		try {
@@ -77,6 +95,12 @@ public class DataCollectService {
 		return result;
 	}
 
+	/**
+	 * Persist given data into database.
+	 * 
+	 * @param dataList
+	 * @return
+	 */
 	public int persistData(List<UploadData> dataList) {
 		try {
 			log.info("data collected: \n" + mapper.writeValueAsString(dataList));
@@ -86,28 +110,40 @@ public class DataCollectService {
 		return dao.batchInsert(dataList);
 	}
 
-	@Scheduled(fixedDelay = 3 * 60 * 1000)
-	public void processData() {
-		List<UploadData> dataList = null;
+	/**
+	 * Drain cached data and return as a list. Might be blocked by
+	 * {@link #addData(UploadData)} or {@link #queryAll()} method.
+	 * 
+	 * @return
+	 */
+	public List<UploadData> drainCache() {
+		log.info("queue size: " + cache.size());
+		List<UploadData> dataList = new ArrayList<UploadData>();
 		try {
 			writeLock.lock();
-			dataList = drainCache();
+			while (!cache.isEmpty()) {
+				dataList.add(cache.poll());
+			}
 		} finally {
 			writeLock.unlock();
-		}
-		if (dataList != null && !dataList.isEmpty()) {
-			persistData(dataList);
-		}
-	}
-
-	private List<UploadData> drainCache() {
-		List<UploadData> dataList = new ArrayList<UploadData>();
-		log.info("queue size: " + cache.size());
-		while (!cache.isEmpty()) {
-			dataList.add(cache.poll());
 		}
 		log.info("list size: " + dataList.size());
 		return dataList;
 	}
 
+	/**
+	 * Drain cached data and persist them periodically.
+	 */
+	@Scheduled(cron = "${data.collect.cron}")
+	public void processData() {
+		try {
+			log.info("time to process data...");
+			List<UploadData> dataList = drainCache();
+			if (dataList != null && !dataList.isEmpty()) {
+				persistData(dataList);
+			}
+		} catch (Exception e) {
+			log.error(e, e);
+		}
+	}
 }
